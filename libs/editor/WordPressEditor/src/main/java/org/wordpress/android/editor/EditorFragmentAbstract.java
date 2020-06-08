@@ -192,13 +192,16 @@ public abstract class EditorFragmentAbstract extends Fragment {
         void onMediaDeleted(String mediaId);
         void onUndoMediaCheck(String undoedContent);
         void onVideoPressInfoRequested(String videoId);
-        String onAuthHeaderRequested(String url);
+        Map<String, String> onAuthHeaderRequested(String url);
         void onTrackableEvent(TrackableEvent event);
         void onHtmlModeToggledInToolbar();
         void onAddStockMediaClicked(boolean allowMultipleSelection);
         void onPerformFetch(String path, Consumer<String> onResult, Consumer<Bundle> onError);
         void onGutenbergEditorSessionTemplateApplyTracked(String template);
         void onGutenbergEditorSessionTemplatePreviewTracked(String template);
+        void getMention(Consumer<String> onResult);
+        void onGutenbergEditorSetStarterPageTemplatesTooltipShown(boolean tooltipShown);
+        boolean onGutenbergEditorRequestStarterPageTemplatesTooltipShown();
     }
 
     /**

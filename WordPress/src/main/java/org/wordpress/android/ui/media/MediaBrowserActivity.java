@@ -56,6 +56,7 @@ import org.wordpress.android.fluxc.model.SiteModel;
 import org.wordpress.android.fluxc.store.MediaStore;
 import org.wordpress.android.fluxc.store.MediaStore.CancelMediaPayload;
 import org.wordpress.android.fluxc.store.MediaStore.OnMediaChanged;
+import org.wordpress.android.fluxc.store.MediaStore.OnMediaListFetched;
 import org.wordpress.android.fluxc.store.MediaStore.OnMediaUploaded;
 import org.wordpress.android.fluxc.store.SiteStore;
 import org.wordpress.android.fluxc.store.SiteStore.OnSiteChanged;
@@ -63,6 +64,7 @@ import org.wordpress.android.ui.ActivityId;
 import org.wordpress.android.ui.ActivityLauncher;
 import org.wordpress.android.ui.LocaleAwareActivity;
 import org.wordpress.android.ui.RequestCodes;
+import org.wordpress.android.ui.gif.GifPickerActivity;
 import org.wordpress.android.ui.media.MediaGridFragment.MediaFilter;
 import org.wordpress.android.ui.media.MediaGridFragment.MediaGridListener;
 import org.wordpress.android.ui.media.services.MediaDeleteService;
@@ -105,6 +107,7 @@ public class MediaBrowserActivity extends LocaleAwareActivity implements MediaGr
 
     private static final String SAVED_QUERY = "SAVED_QUERY";
     private static final String BUNDLE_MEDIA_CAPTURE_PATH = "mediaCapturePath";
+    private static final String SHOW_AUDIO_TAB = "showAudioTab";
 
     @Inject Dispatcher mDispatcher;
     @Inject MediaStore mMediaStore;
@@ -129,12 +132,15 @@ public class MediaBrowserActivity extends LocaleAwareActivity implements MediaGr
     private MediaBrowserType mBrowserType;
     private AddMenuItem mLastAddMediaItemClicked;
 
+    private boolean mShowAudioTab;
+
     private enum AddMenuItem {
         ITEM_CAPTURE_PHOTO,
         ITEM_CAPTURE_VIDEO,
         ITEM_CHOOSE_PHOTO,
         ITEM_CHOOSE_VIDEO,
-        ITEM_CHOOSE_STOCK_MEDIA
+        ITEM_CHOOSE_STOCK_MEDIA,
+        ITEM_CHOOSE_GIF
     }
 
     @Override
@@ -146,11 +152,13 @@ public class MediaBrowserActivity extends LocaleAwareActivity implements MediaGr
         if (savedInstanceState == null) {
             mSite = (SiteModel) getIntent().getSerializableExtra(WordPress.SITE);
             mBrowserType = (MediaBrowserType) getIntent().getSerializableExtra(ARG_BROWSER_TYPE);
+            mShowAudioTab = mMediaStore.getSiteAudio(mSite).size() > 0;
         } else {
             mSite = (SiteModel) savedInstanceState.getSerializable(WordPress.SITE);
             mBrowserType = (MediaBrowserType) savedInstanceState.getSerializable(ARG_BROWSER_TYPE);
             mMediaCapturePath = savedInstanceState.getString(BUNDLE_MEDIA_CAPTURE_PATH);
             mQuery = savedInstanceState.getString(SAVED_QUERY);
+            mShowAudioTab = savedInstanceState.getBoolean(SHOW_AUDIO_TAB);
         }
 
         if (mSite == null) {
@@ -182,6 +190,7 @@ public class MediaBrowserActivity extends LocaleAwareActivity implements MediaGr
         handleSharedMedia();
 
         mTabLayout = findViewById(R.id.tab_layout);
+
         setupTabs();
 
         MediaFilter filter;
@@ -282,7 +291,9 @@ public class MediaBrowserActivity extends LocaleAwareActivity implements MediaGr
             mTabLayout.addTab(mTabLayout.newTab().setText(R.string.media_images)); // FILTER_IMAGES
             mTabLayout.addTab(mTabLayout.newTab().setText(R.string.media_documents)); // FILTER_DOCUMENTS
             mTabLayout.addTab(mTabLayout.newTab().setText(R.string.media_videos)); // FILTER_VIDEOS
-            mTabLayout.addTab(mTabLayout.newTab().setText(R.string.media_audio)); // FILTER_AUDIO
+            if (mShowAudioTab) {
+                mTabLayout.addTab(mTabLayout.newTab().setText(R.string.media_audio)); // FILTER_AUDIO
+            }
 
             mTabLayout.clearOnTabSelectedListeners();
             mTabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
@@ -325,6 +336,14 @@ public class MediaBrowserActivity extends LocaleAwareActivity implements MediaGr
             });
         } else {
             mTabLayout.setVisibility(View.GONE);
+        }
+    }
+
+    private void refreshTabs() {
+        boolean hasAudio = mMediaStore.getSiteAudio(mSite).size() > 0;
+        if (mShowAudioTab != hasAudio) {
+            mShowAudioTab = hasAudio;
+            setupTabs();
         }
     }
 
@@ -402,6 +421,7 @@ public class MediaBrowserActivity extends LocaleAwareActivity implements MediaGr
         outState.putString(SAVED_QUERY, mQuery);
         outState.putSerializable(WordPress.SITE, mSite);
         outState.putSerializable(ARG_BROWSER_TYPE, mBrowserType);
+        outState.putBoolean(SHOW_AUDIO_TAB, mShowAudioTab);
         if (mMediaGridFragment != null) {
             outState.putSerializable(ARG_FILTER, mMediaGridFragment.getFilter());
         }
@@ -459,11 +479,25 @@ public class MediaBrowserActivity extends LocaleAwareActivity implements MediaGr
             case RequestCodes.MEDIA_SETTINGS:
                 if (resultCode == MediaSettingsActivity.RESULT_MEDIA_DELETED) {
                     reloadMediaGrid();
+                    refreshTabs();
                 }
                 break;
             case RequestCodes.STOCK_MEDIA_PICKER_MULTI_SELECT:
                 if (resultCode == RESULT_OK) {
                     reloadMediaGrid();
+                }
+                break;
+            case RequestCodes.GIF_PICKER:
+                if (resultCode == RESULT_OK
+                    && data.hasExtra(GifPickerActivity.KEY_SAVED_MEDIA_MODEL_LOCAL_IDS)) {
+                    int[] mediaLocalIds = data.getIntArrayExtra(GifPickerActivity.KEY_SAVED_MEDIA_MODEL_LOCAL_IDS);
+
+                    ArrayList<MediaModel> mediaModels = new ArrayList<>();
+                    for (int localId : mediaLocalIds) {
+                        mediaModels.add(mMediaStore.getMediaWithLocalId(localId));
+                    }
+
+                    addMediaToUploadService(mediaModels);
                 }
                 break;
         }
@@ -726,6 +760,15 @@ public class MediaBrowserActivity extends LocaleAwareActivity implements MediaGr
         }
     }
 
+    @SuppressWarnings("unused")
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onMediaListFetched(OnMediaListFetched event) {
+        if (event.isError()) {
+            return;
+        }
+        refreshTabs();
+    }
+
     @Override
     public void onSupportActionModeStarted(@NonNull ActionMode mode) {
         super.onSupportActionModeStarted(mode);
@@ -872,6 +915,14 @@ public class MediaBrowserActivity extends LocaleAwareActivity implements MediaGr
                     });
         }
 
+        if (mBrowserType.isBrowser() && BuildConfig.TENOR_AVAILABLE) {
+            popup.getMenu().add(R.string.photo_picker_gif).setOnMenuItemClickListener(
+                    item -> {
+                        doAddMediaItemClicked(AddMenuItem.ITEM_CHOOSE_GIF);
+                        return true;
+                    });
+        }
+
         popup.show();
     }
 
@@ -908,6 +959,9 @@ public class MediaBrowserActivity extends LocaleAwareActivity implements MediaGr
             case ITEM_CHOOSE_STOCK_MEDIA:
                 ActivityLauncher.showStockMediaPickerForResult(this,
                         mSite, RequestCodes.STOCK_MEDIA_PICKER_MULTI_SELECT);
+                break;
+            case ITEM_CHOOSE_GIF:
+                ActivityLauncher.showGifPickerForResult(this, mSite, RequestCodes.GIF_PICKER);
                 break;
         }
     }

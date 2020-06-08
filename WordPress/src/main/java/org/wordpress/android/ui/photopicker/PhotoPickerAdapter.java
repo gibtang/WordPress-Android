@@ -286,6 +286,16 @@ public class PhotoPickerAdapter extends RecyclerView.Adapter<PhotoPickerAdapter.
         return (ThumbnailViewHolder) mRecycler.findViewHolderForAdapterPosition(position);
     }
 
+    boolean isVideoFileSelected() {
+        for (Integer position : mSelectedPositions) {
+            PhotoPickerItem item = getItemAtPosition(position);
+            if (item != null && item.mIsVideo) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @NonNull
     ArrayList<Uri> getSelectedURIs() {
         ArrayList<Uri> uriList = new ArrayList<>();
@@ -450,10 +460,12 @@ public class PhotoPickerAdapter extends RecyclerView.Adapter<PhotoPickerAdapter.
         @Override
         protected Boolean doInBackground(Void... params) {
             // images
-            addMedia(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, false);
+            if (mBrowserType.isImagePicker()) {
+                addMedia(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, false);
+            }
 
             // videos
-            if (!mBrowserType.isSingleImagePicker()) {
+            if (mBrowserType.isVideoPicker()) {
                 addMedia(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, true);
             }
 

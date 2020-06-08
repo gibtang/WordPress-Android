@@ -1,4 +1,4 @@
-Block editor: Added Latest Posts block, fixed crash caused by pasting HTML content with embedded images
-Page Templates: Added a block-based templates for quicker page creation.
-Site Creation: removed a few steps for faster setup — select the kind of site, enter the domain name, done.
-Bug fix: fixed an issue causing failed post uploads to be retried indefinitely.
+Block editor additions: New Verse block. Support for overlay colors in Cover block. Enter/exit animation for the Floating Toolbar. Tooltip for page template selection buttons.
+Block editor updates: “Trash block” in a menu reachable from the block toolbar.
+Block editor fixes: Text block merging issue, button alignment in page templates, string inconsistencies.
+Other updates: Added homepage settings to pages list and to site settings. Improved Reader UI.
